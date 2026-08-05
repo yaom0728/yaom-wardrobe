@@ -1,4 +1,25 @@
 const STATUS={};
+const CATEGORY_OVERRIDES_V2={
+  '8237392':'\uD5E4\uC5B4',
+  '4512842':'\uD5E4\uC5B4',
+  '6319779':'\uD5E4\uC5B4',
+  '6729707':'\uC545\uC138\uC0AC\uB9AC',
+  '5284793':'\uC6D4\uB4DC',
+  '8436194':'\uC758\uC0C1',
+  '8024974':'\uD14D\uC2A4\uCC98',
+  '7822755':'\uC758\uC0C1',
+  '7700084':'\uC758\uC0C1',
+  '7435582':'\uC758\uC0C1',
+  '6610175':'\uD234',
+  '6744059':'\uC758\uC0C1',
+  '6640868':'\uC758\uC0C1',
+  '6584413':'\uC758\uC0C1',
+  '6770800':'\uC758\uC0C1',
+  '6415336':'\uC758\uC0C1',
+  '6533470':'\uC758\uC0C1',
+  '5802231':'\uC758\uC0C1',
+  '8040725':'\uC758\uC0C1'
+};
 const CATEGORY_OVERRIDES={'7772782':'헤어'};
 const GROUPS={
   '전체':['전체'],
@@ -10,6 +31,7 @@ const GROUPS={
 const state={group:'전체',leaf:'전체',query:'',shop:'',avatar:'',sort:'new',unavailable:false};
 function itemId(x){return(x.u.match(/items\/(\d+)/)||[])[1]||String(x.i)}
 function categoryOf(x){
+  const forced=CATEGORY_OVERRIDES_V2[itemId(x)];if(forced)return forced;
   if(x.c)return x.c;
   if(CATEGORY_OVERRIDES[itemId(x)])return CATEGORY_OVERRIDES[itemId(x)];
   const t=(x.t+' '+x.s).toLowerCase();
