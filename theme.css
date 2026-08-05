@@ -1,0 +1,8 @@
+:root { --orange: #339cff; }
+
+.toolbar { grid-template-columns: minmax(260px, 1fr) 170px 155px 120px auto; }
+.avatar-tags { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 10px; }
+.avatar-tags span { border:1px solid #353f4b; background:#161d25; color:#8fc7ff; padding:4px 6px; font:700 8px Arial; letter-spacing:.04em; }
+
+@media (max-width:1000px) { .toolbar { grid-template-columns:1fr 1fr; } }
+@media (max-width:680px) { .toolbar { display:flex; } }
