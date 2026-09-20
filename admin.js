@@ -1,6 +1,7 @@
 const ADMIN_LOGIN='yaom0728';
 const REPOSITORY='yaom0728/yaom-wardrobe';
 const COLLECTION_FILE='collections.json';
+const TOKEN_STORAGE_KEY='yaom-admin-token';
 const CATEGORY_OPTIONS=['아바타','의상','헤어','악세사리','포즈','텍스처','월드','툴'];
 
 let accessToken='';
@@ -77,10 +78,12 @@ function toast(text,error=false){
   messageTimer=setTimeout(()=>target.classList.remove('show'),5000);
 }
 
-async function connect(){
+async function connect(rememberedToken=''){
   const input=document.querySelector('#github-token');
+  const remember=document.querySelector('#remember-token');
   const button=document.querySelector('#connect');
-  const token=input.value.trim();
+  const token=(rememberedToken||input.value).trim();
+  const shouldRemember=!!rememberedToken||remember.checked;
   if(!token){setLoginMessage('토큰을 입력해 주세요.');return}
   accessToken=token;input.value='';button.disabled=true;setLoginMessage('GitHub 계정을 확인하고 있어요…',true);
   try{
@@ -90,17 +93,23 @@ async function connect(){
     fileSha=file.sha;
     originalOverrides=JSON.parse(decodeBase64(file.content));
     draftOverrides={...originalOverrides};
+    if(shouldRemember)localStorage.setItem(TOKEN_STORAGE_KEY,accessToken);
+    else localStorage.removeItem(TOKEN_STORAGE_KEY);
     document.querySelector('#owner-name').textContent=`@${user.login}`;
     document.querySelector('#login-panel').hidden=true;
     document.querySelector('#editor').hidden=false;
     render();
   }catch(error){
-    accessToken='';setLoginMessage(error.message||'관리자 연결에 실패했어요.');
+    accessToken='';
+    if(rememberedToken){localStorage.removeItem(TOKEN_STORAGE_KEY);remember.checked=false}
+    setLoginMessage(error.message||'관리자 연결에 실패했어요.');
   }finally{button.disabled=false}
 }
 
 function disconnect(){
   accessToken='';fileSha='';originalOverrides={};draftOverrides={};
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  document.querySelector('#remember-token').checked=false;
   document.querySelector('#editor').hidden=true;
   document.querySelector('#login-panel').hidden=false;
   setLoginMessage('연결을 해제했어요.',true);
@@ -168,7 +177,7 @@ async function save(){
 }
 
 function bind(){
-  document.querySelector('#connect').onclick=connect;
+  document.querySelector('#connect').onclick=()=>connect();
   document.querySelector('#github-token').onkeydown=event=>{if(event.key==='Enter')connect()};
   document.querySelector('#disconnect').onclick=disconnect;
   document.querySelector('#admin-search').oninput=event=>{query=event.target.value;render()};
@@ -181,7 +190,15 @@ function bind(){
 async function init(){
   CATEGORY_OPTIONS.forEach(category=>document.querySelector('#admin-category').add(new Option(category,category)));
   bind();
-  try{items=await loadItems()}catch(error){setLoginMessage('상품 데이터를 불러오지 못했어요.');document.querySelector('#connect').disabled=true}
+  try{
+    items=await loadItems();
+    const rememberedToken=localStorage.getItem(TOKEN_STORAGE_KEY)||'';
+    if(rememberedToken){
+      document.querySelector('#remember-token').checked=true;
+      setLoginMessage('저장된 토큰으로 연결하고 있어요…',true);
+      await connect(rememberedToken);
+    }
+  }catch(error){setLoginMessage('상품 데이터를 불러오지 못했어요.');document.querySelector('#connect').disabled=true}
 }
 
 init();

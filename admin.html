@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://booth.pximg.net">
   <link rel="stylesheet" href="styles.css?v=20260920-admin">
   <link rel="stylesheet" href="theme.css?v=20260920-admin">
-  <link rel="stylesheet" href="admin.css?v=20260920-admin">
+  <link rel="stylesheet" href="admin.css?v=20260920-remember">
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -28,11 +28,12 @@
       <div>
         <p class="panel-label">GITHUB AUTHORIZATION</p>
         <h2 id="login-title">yaom0728 계정으로 연결</h2>
-        <p>저장 권한이 있는 GitHub 토큰을 입력하세요. 토큰은 이 탭의 메모리에만 머물며 사이트나 브라우저 저장소에 보관되지 않습니다.</p>
+        <p>저장 권한이 있는 GitHub 토큰을 입력하세요. 기본적으로 탭을 닫으면 사라지며, 개인 컴퓨터에서는 기억하기를 선택할 수 있습니다.</p>
       </div>
       <div class="token-box">
         <label for="github-token">Fine-grained personal access token</label>
         <div><input id="github-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"><button id="connect" type="button">관리자 연결</button></div>
+        <label class="remember-token"><input id="remember-token" type="checkbox"><span>이 개인 컴퓨터에서 기억하기</span><small>공용 컴퓨터에서는 선택하지 마세요.</small></label>
         <p><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub에서 전용 토큰 만들기 ↗</a><span>저장소: yaom-wardrobe · 권한: Contents 읽기/쓰기</span></p>
         <strong id="login-message" class="form-message" role="status"></strong>
       </div>
@@ -67,6 +68,6 @@
   </main>
 
   <script src="data.js?v=20260920-admin"></script>
-  <script src="admin.js?v=20260920-admin"></script>
+  <script src="admin.js?v=20260920-remember"></script>
 </body>
 </html>
