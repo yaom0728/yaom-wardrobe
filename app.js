@@ -1,64 +1,251 @@
-const STATUS={};
-const CATEGORY_OVERRIDES_V2={
-  '8237392':'\uD5E4\uC5B4',
-  '4512842':'\uD5E4\uC5B4',
-  '6319779':'\uD5E4\uC5B4',
-  '6729707':'\uC545\uC138\uC0AC\uB9AC',
-  '5284793':'\uC6D4\uB4DC',
-  '8436194':'\uC758\uC0C1',
-  '8024974':'\uD14D\uC2A4\uCC98',
-  '7822755':'\uC758\uC0C1',
-  '7700084':'\uC758\uC0C1',
-  '7435582':'\uC758\uC0C1',
-  '6610175':'\uD234',
-  '6744059':'\uC758\uC0C1',
-  '6640868':'\uC758\uC0C1',
-  '6584413':'\uC758\uC0C1',
-  '6770800':'\uC758\uC0C1',
-  '6415336':'\uC758\uC0C1',
-  '6533470':'\uC758\uC0C1',
-  '5802231':'\uC758\uC0C1',
-  '8040725':'\uC758\uC0C1'
+const STATUS = {};
+
+// 사용자가 직접 확인한 카테고리는 자동 판정보다 항상 우선합니다.
+const CATEGORY_OVERRIDES = {
+  '7772782':'헤어','8237392':'헤어','4512842':'헤어','6319779':'헤어',
+  '6729707':'악세사리','5284793':'월드','8436194':'의상','8024974':'텍스처',
+  '7822755':'의상','7700084':'의상','7435582':'의상','6610175':'툴',
+  '6744059':'의상','6640868':'의상','6584413':'의상','6770800':'의상',
+  '6415336':'의상','6533470':'의상','5802231':'의상','8040725':'의상',
+  '7998485':'텍스처','7998516':'텍스처','8205877':'텍스처','7657840':'툴',
+  '8143206':'의상','8748495':'의상','8040598':'의상','8027848':'의상',
+  '7640427':'의상','8773810':'헤어','8800381':'툴'
 };
-const CATEGORY_OVERRIDES={'7772782':'헤어'};
-const GROUPS={
-  '전체':['전체'],
-  '아바타':['아바타'],
-  '파츠':['의상','헤어','악세사리'],
-  '기타':['포즈','텍스처','월드'],
-  '툴':['툴']
+
+const CATEGORIES = [
+  {id:'전체', label:'전체 상품', icon:'▦'},
+  {id:'아바타', label:'아바타', icon:'○'},
+  {id:'의상', label:'의상', icon:'◇'},
+  {id:'헤어', label:'헤어', icon:'⌁'},
+  {id:'악세사리', label:'악세사리', icon:'+'},
+  {id:'포즈', label:'포즈', icon:'⌇'},
+  {id:'텍스처', label:'텍스처', icon:'◫'},
+  {id:'월드', label:'월드', icon:'⌂'},
+  {id:'툴', label:'툴', icon:'⚙'}
+];
+
+const state = {
+  category:'전체', special:'', query:'', shop:'', avatar:'', sort:'new',
+  favorites:new Set(JSON.parse(localStorage.getItem('yaom-favorites') || '[]'))
 };
-const state={group:'전체',leaf:'전체',query:'',shop:'',avatar:'',sort:'new',unavailable:false};
-function itemId(x){return(x.u.match(/items\/(\d+)/)||[])[1]||String(x.i)}
-function categoryOf(x){
-  const forced=CATEGORY_OVERRIDES_V2[itemId(x)];if(forced)return forced;
-  if(x.c)return x.c;
-  if(CATEGORY_OVERRIDES[itemId(x)])return CATEGORY_OVERRIDES[itemId(x)];
-  const t=(x.t+' '+x.s).toLowerCase();
-  if(/tool|ツール|plugin|プラグイン|system|generator|manager|editor|メーカー|unity|shader|spout|warudo|avapo|알파스트림/.test(t))return'툴';
-  if(/pose|ポーズ|motion|モーション|animation|アニメーション/.test(t))return'포즈';
-  if(/texture|テクスチャ|makeup|メイク|eye tex|body tex|skin tex|肌|瞳/.test(t))return'텍스처';
-  if(!/対応|support|compatible/.test(t)&&/オリジナル\s*3d(?:モデル|アバター)|original\s*3d\s*(?:model|avatar)|오리지널\s*3d\s*(?:모델|아바타)/.test(t))return'아바타';
-  if(/hair|ヘア|髪|ponytail|ポニー|twintail|ツインテ|bob|ボブ|braid|お団子|ウルフ/.test(t))return'헤어';
-  // 실제 착용 소품만 악세사리로 분류한다. (VRChat 내부의 'hat' 같은 부분 문자열은 제외)
-  if(/accessor(?:y|ies)|アクセサリ|악세사리|小物|眼鏡|メガネ|안경|バッグ|가방|リュック|バックパック|ヘッドセット|ヘッドホン|헤드셋|모자|帽子|ピアス|イヤリング|earrings?|necklace|ネックレス|choker|チョーカー|bracelet|ブレスレット|umbrella|傘|\b(?:glasses|sunglasses|bag|backpack|headset|headphones?|hat|cap|beanie|shoes?)\b/.test(t))return'악세사리';
-  return'의상';
+
+function itemId(item){
+  return (item.u.match(/items\/(\d+)/) || [])[1] || String(item.i);
 }
-function escapeHtml(s=''){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function loadData(){const bytes=Uint8Array.from(atob(window.YAOM_DATA_B64),c=>c.charCodeAt(0));const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));return JSON.parse(await new Response(stream).text())}
-function setGroup(group,items,leaf=GROUPS[group][0]){state.group=group;state.leaf=leaf;drawNav(items);render(items);document.querySelector('#collection-title').textContent=leaf==='전체'?'ALL ITEMS':leaf.toUpperCase();}
+
+function categoryOf(item){
+  const forced = CATEGORY_OVERRIDES[itemId(item)];
+  if(forced) return forced;
+  if(item.c) return item.c;
+  const text = `${item.t} ${item.s}`.toLowerCase();
+  if(/tool|ツール|plugin|プラグイン|system|generator|manager|editor|メーカー|unity|shader|spout|warudo|avapo|알파스트림/.test(text)) return '툴';
+  if(/pose|ポーズ|motion|モーション|animation|アニメーション/.test(text)) return '포즈';
+  if(/texture|テクスチャ|makeup|メイク|eye tex|body tex|skin tex|肌|瞳/.test(text)) return '텍스처';
+  if(!/対応|support|compatible/.test(text) && /オリジナル\s*3d(?:モデル|アバター)|original\s*3d\s*(?:model|avatar)|오리지널\s*3d\s*(?:모델|아바타)/.test(text)) return '아바타';
+  if(/hair|ヘア|髪|ponytail|ポニー|twintail|ツインテ|bob|ボブ|braid|お団子|ウルフ/.test(text)) return '헤어';
+  if(/accessor(?:y|ies)|アクセサリ|악세사리|小物|眼鏡|メガネ|안경|バッグ|가방|リュック|バックパック|ヘッドセット|ヘッドホン|헤드셋|모자|帽子|ピアス|イヤリング|earrings?|necklace|ネックレス|choker|チョーカー|bracelet|ブレスレット|umbrella|傘|\b(?:glasses|sunglasses|bag|backpack|headset|headphones?|hat|cap|beanie|shoes?)\b/.test(text)) return '악세사리';
+  return '의상';
+}
+
+function escapeHtml(value=''){
+  return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
+
+async function loadData(){
+  const bytes = Uint8Array.from(atob(window.YAOM_DATA_B64), char => char.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(stream).text());
+}
+
+function closeMobileMenu(){
+  document.querySelector('#sidebar').classList.remove('open');
+  document.querySelector('#scrim').classList.remove('show');
+  document.querySelector('#mobile-menu').setAttribute('aria-expanded','false');
+}
+
+function resetFilters(items, keepCategory=false){
+  if(!keepCategory) state.category='전체';
+  state.special=''; state.query=''; state.shop=''; state.avatar=''; state.sort='new';
+  document.querySelector('#search').value='';
+  document.querySelector('#shop').value='';
+  document.querySelector('#avatar').value='';
+  document.querySelector('#sort').value='new';
+  drawNav(items); render(items); closeMobileMenu();
+}
+
+function selectCategory(category, items){
+  state.category=category; state.special='';
+  drawNav(items); render(items); closeMobileMenu();
+  if(innerWidth<760) document.querySelector('.library').scrollIntoView();
+}
+
+function selectSpecial(special, items){
+  state.special=special; state.category='전체';
+  drawNav(items); render(items); closeMobileMenu();
+  if(innerWidth<760) document.querySelector('.library').scrollIntoView();
+}
+
+function countFor(items, category){
+  return category==='전체' ? items.length : items.filter(item=>item.category===category).length;
+}
+
 function drawNav(items){
-  const nav=document.querySelector('#main-nav');nav.innerHTML='';Object.keys(GROUPS).forEach(g=>{const b=document.createElement('button');b.className='nav-item'+(g===state.group?' active':'');b.textContent=g;b.onclick=()=>setGroup(g,items);nav.append(b)});
-  const sub=document.querySelector('#sub-nav');sub.innerHTML='';if(GROUPS[state.group].length>1){const all=document.createElement('button');all.className='sub-item'+(state.leaf===state.group?' active':'');all.textContent=`${state.group} 전체`;all.onclick=()=>{state.leaf=state.group;drawNav(items);render(items)};sub.append(all);GROUPS[state.group].forEach(l=>{const b=document.createElement('button');b.className='sub-item'+(l===state.leaf?' active':'');b.textContent=l;b.onclick=()=>{state.leaf=l;drawNav(items);render(items)};sub.append(b)})}}
-function categoryCard(group,items,index){const leaves=GROUPS[group],pool=items.filter(x=>leaves.includes(x.category));const img=(pool[index%Math.max(pool.length,1)]||items[index]).m;const count=pool.length;const sub=group==='파츠'?'의상 · 헤어 · 악세사리':group==='기타'?'포즈 · 텍스처':group;return`<button class="category-card" data-group="${group}"><img src="${img}" alt="" loading="lazy"><div><span><strong>${group}</strong><span>${sub} / ${count} ITEMS</span></span><b>↗</b></div></button>`}
-function avatarChips(x){if(!x.a?.length)return'';const shown=x.a.slice(0,4).map(a=>`<span>${escapeHtml(a)}</span>`).join('');const more=x.a.length>4?`<span>+${x.a.length-4}</span>`:'';return`<div class="avatar-tags" title="${escapeHtml(x.a.join(', '))}">${shown}${more}</div>`}
-function card(x){const status=STATUS[itemId(x)],label=status==='deleted'?'판매 종료':status==='shop-closed'?'샵 폐쇄':'CHECK';return`<article class="card"><a class="thumb" href="${x.u}" target="_blank" rel="noopener"><img src="${x.m}" alt="" loading="lazy" referrerpolicy="no-referrer">${x.g?'<span class="gift-tag">GIFT</span>':''}<span class="state-tag ${status?'off':''}">${label}</span></a><div class="card-body"><span class="card-cat">${x.category}${x.f?' · FULL PACK':''}</span><h3>${escapeHtml(x.t)}</h3>${avatarChips(x)}<a class="shop" href="${x.p}" target="_blank" rel="noopener">${escapeHtml(x.s)}</a></div></article>`}
-function render(items){const allowed=state.group==='전체'?null:GROUPS[state.group];let out=items.filter(x=>(!allowed||allowed.includes(x.category))&&(state.leaf==='전체'||state.leaf===state.group||x.category===state.leaf)&&(!state.shop||x.s===state.shop)&&(!state.avatar||x.a?.includes(state.avatar))&&(!state.query||(x.t+' '+x.s+' '+(x.a||[]).join(' ')).toLowerCase().includes(state.query))&&(!state.unavailable||STATUS[itemId(x)]));out.sort((a,b)=>state.sort==='old'?b.i-a.i:state.sort==='name'?a.t.localeCompare(b.t):a.i-b.i);document.querySelector('#grid').innerHTML=out.map(card).join('');document.querySelector('#result-count').textContent=out.length;document.querySelector('#empty').hidden=!!out.length}
-function init(items){
-  items.forEach(x=>x.category=categoryOf(x));document.querySelector('#hero-total').textContent=String(items.length).padStart(3,'0');const featured=items.find(x=>x.category==='의상')||items[0];document.querySelector('#hero-img').src=featured.m;document.querySelector('#hero-title').textContent=featured.t;
-  drawNav(items);const cards=document.querySelector('#category-cards');cards.innerHTML=['아바타','파츠','기타','툴'].map((g,i)=>categoryCard(g,items,i*7)).join('');cards.querySelectorAll('button').forEach(b=>b.onclick=()=>{setGroup(b.dataset.group,items);document.querySelector('#collection').scrollIntoView()});
-  [...new Set(items.map(x=>x.s))].sort((a,b)=>a.localeCompare(b)).forEach(s=>document.querySelector('#shop').add(new Option(s,s)));
-  [...new Set(items.flatMap(x=>x.a||[]))].sort((a,b)=>a.localeCompare(b)).forEach(a=>document.querySelector('#avatar').add(new Option(a,a)));
-  document.querySelector('#search').oninput=e=>{state.query=e.target.value.toLowerCase();render(items)};document.querySelector('#shop').onchange=e=>{state.shop=e.target.value;render(items)};document.querySelector('#avatar').onchange=e=>{state.avatar=e.target.value;render(items)};document.querySelector('#sort').onchange=e=>{state.sort=e.target.value;render(items)};document.querySelector('#unavailable').onchange=e=>{state.unavailable=e.target.checked;render(items)};document.querySelector('#explore').onclick=()=>document.querySelector('#collection').scrollIntoView();render(items)
+  const nav=document.querySelector('#main-nav');
+  nav.innerHTML=CATEGORIES.map(cat=>`<button class="side-item ${!state.special&&state.category===cat.id?'active':''}" type="button" data-category="${cat.id}"><span class="side-icon">${cat.icon}</span><span>${cat.label}</span><b>${countFor(items,cat.id)}</b></button>`).join('');
+  nav.querySelectorAll('[data-category]').forEach(button=>button.onclick=()=>selectCategory(button.dataset.category,items));
+
+  document.querySelectorAll('[data-special]').forEach(button=>{
+    button.classList.toggle('active',state.special===button.dataset.special);
+    button.onclick=()=>selectSpecial(button.dataset.special,items);
+  });
+  document.querySelector('#gift-count').textContent=items.filter(item=>item.g).length;
+  document.querySelector('#favorite-count').textContent=state.favorites.size;
+  document.querySelector('#unavailable-count').textContent=items.filter(item=>STATUS[itemId(item)]).length;
 }
-loadData().then(init).catch(()=>{document.querySelector('#empty').hidden=false;document.querySelector('#empty').textContent='DATA LOAD ERROR'});
+
+function avatarTags(item){
+  if(!item.a?.length) return '';
+  const tags=item.a.slice(0,3).map(avatar=>`<span>${escapeHtml(avatar)}</span>`).join('');
+  const more=item.a.length>3?`<span>+${item.a.length-3}</span>`:'';
+  return `<div class="avatar-tags" title="${escapeHtml(item.a.join(', '))}">${tags}${more}</div>`;
+}
+
+function statusBadge(item){
+  const status=STATUS[itemId(item)];
+  if(status==='deleted') return '<span class="badge off">판매 종료</span>';
+  if(status==='shop-closed') return '<span class="badge off">샵 폐쇄</span>';
+  if(item.g) return '<span class="badge gift">GIFT</span>';
+  return '';
+}
+
+function card(item){
+  const id=itemId(item), favorite=state.favorites.has(id);
+  return `<article class="product-card" data-id="${id}">
+    <a class="thumb" href="${item.u}" target="_blank" rel="noopener" aria-label="${escapeHtml(item.t)} BOOTH에서 보기">
+      <img src="${item.m}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      ${statusBadge(item)}
+    </a>
+    <button class="favorite ${favorite?'on':''}" type="button" data-favorite="${id}" aria-label="즐겨찾기 ${favorite?'해제':'추가'}">${favorite?'★':'☆'}</button>
+    <div class="product-info">
+      <a class="shop" href="${item.p}" target="_blank" rel="noopener">${escapeHtml(item.s)}</a>
+      <h3 class="product-title">${escapeHtml(item.t)}</h3>
+      <div class="meta-row"><span class="category-tag">${item.category}</span>${item.f?'<span class="pack-tag">FULL PACK</span>':''}</div>
+      ${avatarTags(item)}
+      <a class="card-action" href="${item.u}" target="_blank" rel="noopener">BOOTH에서 보기 ↗</a>
+    </div>
+  </article>`;
+}
+
+function currentLabel(){
+  if(state.special==='gift') return '받은 기프트';
+  if(state.special==='favorite') return '즐겨찾기';
+  if(state.special==='unavailable') return '판매 종료 / 샵 폐쇄';
+  return CATEGORIES.find(cat=>cat.id===state.category)?.label || '전체 상품';
+}
+
+function filteredItems(items){
+  const query=state.query.trim().toLowerCase();
+  const result=items.filter(item=>{
+    if(state.category!=='전체' && item.category!==state.category) return false;
+    if(state.special==='gift' && !item.g) return false;
+    if(state.special==='favorite' && !state.favorites.has(itemId(item))) return false;
+    if(state.special==='unavailable' && !STATUS[itemId(item)]) return false;
+    if(state.shop && item.s!==state.shop) return false;
+    if(state.avatar && !item.a?.includes(state.avatar)) return false;
+    if(query && !`${item.t} ${item.s} ${(item.a||[]).join(' ')}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
+  result.sort((a,b)=>{
+    if(state.sort==='old') return b.i-a.i;
+    if(state.sort==='name') return a.t.localeCompare(b.t);
+    if(state.sort==='shop') return a.s.localeCompare(b.s)||a.t.localeCompare(b.t);
+    return a.i-b.i;
+  });
+  return result;
+}
+
+function drawFilterChips(items){
+  const chips=[];
+  if(state.query) chips.push(['query',`검색: ${state.query}`]);
+  if(state.shop) chips.push(['shop',state.shop]);
+  if(state.avatar) chips.push(['avatar',`아바타: ${state.avatar}`]);
+  const root=document.querySelector('#filter-chips');
+  root.innerHTML=chips.map(([key,label])=>`<button type="button" data-clear="${key}">${escapeHtml(label)} ×</button>`).join('');
+  root.querySelectorAll('button').forEach(button=>button.onclick=()=>{
+    const key=button.dataset.clear; state[key]='';
+    if(key==='query') document.querySelector('#search').value='';
+    if(key==='shop') document.querySelector('#shop').value='';
+    if(key==='avatar') document.querySelector('#avatar').value='';
+    render(items);
+  });
+}
+
+function render(items){
+  const visible=filteredItems(items);
+  document.querySelector('#grid').innerHTML=visible.map(card).join('');
+  document.querySelector('#result-count').textContent=visible.length.toLocaleString('ko-KR');
+  document.querySelector('#active-label').textContent=currentLabel();
+  document.querySelector('#empty').hidden=visible.length!==0;
+  const hasFilters=!!(state.special||state.category!=='전체'||state.query||state.shop||state.avatar||state.sort!=='new');
+  document.querySelector('#clear-filters').hidden=!hasFilters;
+  drawFilterChips(items);
+
+  document.querySelectorAll('[data-favorite]').forEach(button=>button.onclick=()=>{
+    const id=button.dataset.favorite;
+    if(state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id);
+    localStorage.setItem('yaom-favorites',JSON.stringify([...state.favorites]));
+    drawNav(items); render(items);
+  });
+}
+
+function fillSelects(items){
+  [...new Set(items.map(item=>item.s))].sort((a,b)=>a.localeCompare(b)).forEach(shop=>document.querySelector('#shop').add(new Option(shop,shop)));
+  [...new Set(items.flatMap(item=>item.a||[]))].sort((a,b)=>a.localeCompare(b)).forEach(avatar=>document.querySelector('#avatar').add(new Option(avatar,avatar)));
+}
+
+function bindControls(items){
+  document.querySelector('#search').oninput=event=>{state.query=event.target.value;render(items)};
+  document.querySelector('#shop').onchange=event=>{state.shop=event.target.value;render(items)};
+  document.querySelector('#avatar').onchange=event=>{state.avatar=event.target.value;render(items)};
+  document.querySelector('#sort').onchange=event=>{state.sort=event.target.value;render(items)};
+  document.querySelector('#clear-filters').onclick=()=>resetFilters(items);
+  document.querySelector('#empty-reset').onclick=()=>resetFilters(items);
+
+  const density=document.querySelector('#density');
+  const savedDensity=Number(localStorage.getItem('yaom-density'))||4;
+  density.value=String(savedDensity);
+  document.documentElement.style.setProperty('--columns',savedDensity);
+  density.oninput=event=>{
+    document.documentElement.style.setProperty('--columns',event.target.value);
+    localStorage.setItem('yaom-density',event.target.value);
+  };
+
+  document.addEventListener('keydown',event=>{
+    if(event.key==='/' && !/input|select|textarea/i.test(document.activeElement.tagName)){
+      event.preventDefault(); document.querySelector('#search').focus();
+    }
+    if(event.key==='Escape') closeMobileMenu();
+  });
+
+  const menu=document.querySelector('#mobile-menu');
+  menu.onclick=()=>{
+    const open=!document.querySelector('#sidebar').classList.contains('open');
+    document.querySelector('#sidebar').classList.toggle('open',open);
+    document.querySelector('#scrim').classList.toggle('show',open);
+    menu.setAttribute('aria-expanded',String(open));
+  };
+  document.querySelector('#scrim').onclick=closeMobileMenu;
+}
+
+function init(items){
+  items.forEach(item=>item.category=categoryOf(item));
+  fillSelects(items); bindControls(items); drawNav(items); render(items);
+  document.querySelector('#updated-at').textContent='LIVE';
+}
+
+loadData().then(init).catch(error=>{
+  console.error(error);
+  const empty=document.querySelector('#empty');
+  empty.hidden=false;
+  empty.querySelector('strong').textContent='상품 데이터를 불러오지 못했어요.';
+});
