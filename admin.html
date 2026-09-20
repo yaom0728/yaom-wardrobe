@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#f5f7fa">
+  <title>야옴 옷장 — 컬렉션 관리</title>
+  <link rel="preconnect" href="https://booth.pximg.net">
+  <link rel="stylesheet" href="styles.css?v=20260920-admin">
+  <link rel="stylesheet" href="theme.css?v=20260920-admin">
+  <link rel="stylesheet" href="admin.css?v=20260920-admin">
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <a class="admin-brand" href="./"><span class="brand-mark">Y</span><span><strong>YAOM Shelf</strong><small>Collection manager</small></span></a>
+    <a class="back-link" href="./">공개 옷장 보기 ↗</a>
+  </header>
+
+  <main class="admin-shell">
+    <section class="admin-intro">
+      <p>OWNER ONLY</p>
+      <h1>컬렉션 관리</h1>
+      <span>상품의 분류를 바꾼 뒤 GitHub에 저장하면 공개 옷장에도 자동으로 반영됩니다.</span>
+    </section>
+
+    <section id="login-panel" class="login-panel" aria-labelledby="login-title">
+      <div>
+        <p class="panel-label">GITHUB AUTHORIZATION</p>
+        <h2 id="login-title">yaom0728 계정으로 연결</h2>
+        <p>저장 권한이 있는 GitHub 토큰을 입력하세요. 토큰은 이 탭의 메모리에만 머물며 사이트나 브라우저 저장소에 보관되지 않습니다.</p>
+      </div>
+      <div class="token-box">
+        <label for="github-token">Fine-grained personal access token</label>
+        <div><input id="github-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"><button id="connect" type="button">관리자 연결</button></div>
+        <p><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub에서 전용 토큰 만들기 ↗</a><span>저장소: yaom-wardrobe · 권한: Contents 읽기/쓰기</span></p>
+        <strong id="login-message" class="form-message" role="status"></strong>
+      </div>
+    </section>
+
+    <section id="editor" class="editor" hidden>
+      <div class="owner-strip">
+        <div><span class="owner-dot"></span><strong id="owner-name">yaom0728</strong><small>관리자 연결됨</small></div>
+        <button id="disconnect" type="button">연결 해제</button>
+      </div>
+
+      <div class="editor-toolbar">
+        <label class="admin-search" for="admin-search"><span>⌕</span><input id="admin-search" type="search" placeholder="상품명 · 판매자 · 상품 번호 검색"></label>
+        <select id="admin-category" aria-label="카테고리 필터"><option value="">모든 카테고리</option></select>
+        <label class="changed-toggle"><input id="changed-only" type="checkbox"><span>변경한 상품만</span></label>
+      </div>
+
+      <div class="editor-summary">
+        <p><strong id="admin-count">0</strong>개의 상품</p>
+        <p><strong id="changed-count">0</strong>개 변경됨</p>
+      </div>
+
+      <div id="admin-grid" class="admin-grid"></div>
+      <div id="admin-empty" class="admin-empty" hidden>조건에 맞는 상품이 없어요.</div>
+
+      <div class="save-dock">
+        <div><strong id="dock-count">변경 사항 없음</strong><span>저장하면 GitHub Pages에 수 분 내 반영됩니다.</span></div>
+        <button id="save-collections" type="button" disabled>컬렉션 저장</button>
+      </div>
+      <p id="save-message" class="save-message" role="status"></p>
+    </section>
+  </main>
+
+  <script src="data.js?v=20260920-admin"></script>
+  <script src="admin.js?v=20260920-admin"></script>
+</body>
+</html>

@@ -1,16 +1,7 @@
 const STATUS = {};
 
-// 사용자가 직접 확인한 카테고리는 자동 판정보다 항상 우선합니다.
-const CATEGORY_OVERRIDES = {
-  '7772782':'헤어','8237392':'헤어','4512842':'헤어','6319779':'헤어',
-  '6729707':'악세사리','5284793':'월드','8436194':'의상','8024974':'텍스처',
-  '7822755':'의상','7700084':'의상','7435582':'의상','6610175':'툴',
-  '6744059':'의상','6640868':'의상','6584413':'의상','6770800':'의상',
-  '6415336':'의상','6533470':'의상','5802231':'의상','8040725':'의상',
-  '7998485':'텍스처','7998516':'텍스처','8205877':'텍스처','7657840':'툴',
-  '8143206':'의상','8748495':'의상','8040598':'의상','8027848':'의상',
-  '7640427':'의상','8773810':'헤어','8800381':'툴'
-};
+// 관리자가 지정한 분류는 자동 판정보다 항상 우선합니다.
+let categoryOverrides = {};
 
 const CATEGORIES = [
   {id:'전체', label:'전체 상품', icon:'▦'},
@@ -34,7 +25,7 @@ function itemId(item){
 }
 
 function categoryOf(item){
-  const forced = CATEGORY_OVERRIDES[itemId(item)];
+  const forced = categoryOverrides[itemId(item)];
   if(forced) return forced;
   if(item.c) return item.c;
   const text = `${item.t} ${item.s}`.toLowerCase();
@@ -55,6 +46,12 @@ async function loadData(){
   const bytes = Uint8Array.from(atob(window.YAOM_DATA_B64), char => char.charCodeAt(0));
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
   return JSON.parse(await new Response(stream).text());
+}
+
+async function loadOverrides(){
+  const response=await fetch(`collections.json?v=${Date.now()}`,{cache:'no-store'});
+  if(!response.ok) throw new Error('컬렉션 설정을 불러오지 못했습니다.');
+  return response.json();
 }
 
 function closeMobileMenu(){
@@ -243,7 +240,10 @@ function init(items){
   document.querySelector('#updated-at').textContent='LIVE';
 }
 
-loadData().then(init).catch(error=>{
+Promise.all([loadData(),loadOverrides()]).then(([items,overrides])=>{
+  categoryOverrides=overrides;
+  init(items);
+}).catch(error=>{
   console.error(error);
   const empty=document.querySelector('#empty');
   empty.hidden=false;
