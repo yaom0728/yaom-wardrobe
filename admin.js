@@ -2,13 +2,16 @@ const ADMIN_LOGIN='yaom0728';
 const REPOSITORY='yaom0728/yaom-wardrobe';
 const COLLECTION_FILE='collections.json';
 const TOKEN_STORAGE_KEY='yaom-admin-token';
-const CATEGORY_OPTIONS=['아바타','의상','헤어','악세사리','포즈','텍스처','월드','툴'];
+const BASE_CATEGORY_OPTIONS=['아바타','의상','헤어','악세사리','포즈','텍스처','월드','툴'];
+const RESERVED_COLLECTION_NAMES=['전체','전체 상품','받은 기프트','즐겨찾기','판매 종료'];
 
 let accessToken='';
 let fileSha='';
 let items=[];
 let originalOverrides={};
 let draftOverrides={};
+let originalCustomCollections=[];
+let draftCustomCollections=[];
 let query='';
 let categoryFilter='';
 let changedOnly=false;
@@ -31,6 +34,17 @@ function baseCategoryOf(item){
 function escapeHtml(value=''){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
 function effectiveCategory(item,overrides=draftOverrides){return overrides[itemId(item)]||baseCategoryOf(item)}
 function isChanged(item){return effectiveCategory(item)!==effectiveCategory(item,originalOverrides)}
+function categoryOptions(){return[...BASE_CATEGORY_OPTIONS,...draftCustomCollections]}
+function collectionsChanged(){return JSON.stringify(draftCustomCollections)!==JSON.stringify(originalCustomCollections)}
+function hasPendingChanges(){return collectionsChanged()||items.some(isChanged)}
+
+function normalizeConfig(value){
+  if(value&&value.assignments)return{
+    customCollections:Array.isArray(value.customCollections)?value.customCollections:[],
+    assignments:value.assignments||{}
+  };
+  return{customCollections:[],assignments:value||{}};
+}
 
 async function loadItems(){
   const bytes=Uint8Array.from(atob(window.YAOM_DATA_B64),char=>char.charCodeAt(0));
@@ -91,8 +105,11 @@ async function connect(rememberedToken=''){
     if(user.login.toLowerCase()!==ADMIN_LOGIN)throw new Error(`${ADMIN_LOGIN} 계정의 토큰만 사용할 수 있어요.`);
     const file=await github(`/repos/${REPOSITORY}/contents/${COLLECTION_FILE}?ref=main`);
     fileSha=file.sha;
-    originalOverrides=JSON.parse(decodeBase64(file.content));
+    const config=normalizeConfig(JSON.parse(decodeBase64(file.content)));
+    originalOverrides={...config.assignments};
     draftOverrides={...originalOverrides};
+    originalCustomCollections=[...config.customCollections];
+    draftCustomCollections=[...originalCustomCollections];
     if(shouldRemember)localStorage.setItem(TOKEN_STORAGE_KEY,accessToken);
     else localStorage.removeItem(TOKEN_STORAGE_KEY);
     document.querySelector('#owner-name').textContent=`@${user.login}`;
@@ -107,7 +124,7 @@ async function connect(rememberedToken=''){
 }
 
 function disconnect(){
-  accessToken='';fileSha='';originalOverrides={};draftOverrides={};
+  accessToken='';fileSha='';originalOverrides={};draftOverrides={};originalCustomCollections=[];draftCustomCollections=[];
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   document.querySelector('#remember-token').checked=false;
   document.querySelector('#editor').hidden=true;
@@ -117,7 +134,7 @@ function disconnect(){
 
 function card(item){
   const id=itemId(item),current=effectiveCategory(item),changed=isChanged(item);
-  const options=CATEGORY_OPTIONS.map(category=>`<option value="${category}" ${current===category?'selected':''}>${category}</option>`).join('');
+  const options=categoryOptions().map(category=>`<option value="${escapeHtml(category)}" ${current===category?'selected':''}>${escapeHtml(category)}</option>`).join('');
   return `<article class="admin-card ${changed?'changed':''}" data-id="${id}">
     <a class="admin-thumb" href="${item.u}" target="_blank" rel="noopener"><img src="${item.m}" alt="" loading="lazy" referrerpolicy="no-referrer"><b>#${id}</b></a>
     <div class="admin-card-body"><span class="admin-shop">${escapeHtml(item.s)}</span><h3 class="admin-title">${escapeHtml(item.t)}</h3>
@@ -139,13 +156,51 @@ function visibleItems(){
 function render(){
   const visible=visibleItems();
   const changedCount=items.filter(isChanged).length;
+  const customChanged=collectionsChanged();
   const grid=document.querySelector('#admin-grid');
   grid.innerHTML=visible.map(card).join('');
   document.querySelector('#admin-count').textContent=visible.length.toLocaleString('ko-KR');
   document.querySelector('#changed-count').textContent=changedCount.toLocaleString('ko-KR');
-  document.querySelector('#dock-count').textContent=changedCount?`${changedCount}개 상품 변경됨`:'변경 사항 없음';
-  document.querySelector('#save-collections').disabled=!changedCount;
+  document.querySelector('#dock-count').textContent=changedCount?`${changedCount}개 상품 변경됨`:customChanged?'컬렉션 구성 변경됨':'변경 사항 없음';
+  document.querySelector('#save-collections').disabled=!hasPendingChanges();
   document.querySelector('#admin-empty').hidden=visible.length!==0;
+  renderCustomCollections();
+  refreshCategoryFilter();
+}
+
+function refreshCategoryFilter(){
+  const select=document.querySelector('#admin-category');
+  const available=categoryOptions();
+  const value=available.includes(categoryFilter)?categoryFilter:'';
+  select.innerHTML='<option value="">모든 카테고리</option>';
+  available.forEach(category=>select.add(new Option(category,category)));
+  categoryFilter=value;select.value=value;
+}
+
+function renderCustomCollections(){
+  const root=document.querySelector('#custom-collections');
+  root.innerHTML=draftCustomCollections.map(name=>{
+    const count=items.filter(item=>effectiveCategory(item)===name).length;
+    return`<span class="custom-chip"><span>${escapeHtml(name)}</span><b>${count}</b><button type="button" data-delete-collection="${escapeHtml(name)}" aria-label="${escapeHtml(name)} 삭제">×</button></span>`;
+  }).join('');
+}
+
+function addCollection(){
+  const input=document.querySelector('#collection-name');
+  const name=input.value.trim().replace(/\s+/g,' ');
+  if(!name){toast('컬렉션 이름을 입력해 주세요.',true);return}
+  if(RESERVED_COLLECTION_NAMES.includes(name)){toast('메뉴에서 사용 중인 이름이라 다른 이름이 필요해요.',true);return}
+  if(categoryOptions().some(existing=>existing.toLowerCase()===name.toLowerCase())){toast('이미 같은 이름의 컬렉션이 있어요.',true);return}
+  draftCustomCollections.push(name);input.value='';render();
+  toast(`‘${name}’ 컬렉션을 추가했어요. 저장해야 공개 옷장에 반영됩니다.`);
+}
+
+function deleteCollection(name){
+  const count=items.filter(item=>effectiveCategory(item)===name).length;
+  if(count){toast(`‘${name}’에 상품 ${count}개가 있어요. 먼저 다른 컬렉션으로 옮겨주세요.`,true);return}
+  draftCustomCollections=draftCustomCollections.filter(collection=>collection!==name);
+  if(categoryFilter===name)categoryFilter='';
+  render();
 }
 
 function changeCategory(id,category){
@@ -158,22 +213,23 @@ function changeCategory(id,category){
 async function save(){
   if(!accessToken){toast('관리자 연결이 끊겼어요. 다시 연결해 주세요.',true);disconnect();return}
   const changedCount=items.filter(isChanged).length;
-  if(!changedCount)return;
+  if(!hasPendingChanges())return;
   const button=document.querySelector('#save-collections');
   button.disabled=true;button.textContent='저장 중…';
   try{
-    const content=`${JSON.stringify(draftOverrides,null,2)}\n`;
+    const content=`${JSON.stringify({customCollections:draftCustomCollections,assignments:draftOverrides},null,2)}\n`;
     const result=await github(`/repos/${REPOSITORY}/contents/${COLLECTION_FILE}`,{
       method:'PUT',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:`Update wardrobe collections (${changedCount} changes)`,content:encodeBase64(content),sha:fileSha,branch:'main'})
+      body:JSON.stringify({message:`Update wardrobe collections (${changedCount} item changes)`,content:encodeBase64(content),sha:fileSha,branch:'main'})
     });
     fileSha=result.content.sha;
     originalOverrides={...draftOverrides};
+    originalCustomCollections=[...draftCustomCollections];
     render();
     toast('저장했어요. 공개 옷장에는 보통 1~2분 안에 반영됩니다.');
   }catch(error){toast(error.message||'저장하지 못했어요.',true)}
-  finally{button.textContent='컬렉션 저장';button.disabled=!items.some(isChanged)}
+  finally{button.textContent='컬렉션 저장';button.disabled=!hasPendingChanges()}
 }
 
 function bind(){
@@ -184,11 +240,13 @@ function bind(){
   document.querySelector('#admin-category').onchange=event=>{categoryFilter=event.target.value;render()};
   document.querySelector('#changed-only').onchange=event=>{changedOnly=event.target.checked;render()};
   document.querySelector('#admin-grid').onchange=event=>{if(event.target.matches('[data-category-id]'))changeCategory(event.target.dataset.categoryId,event.target.value)};
+  document.querySelector('#collection-form').onsubmit=event=>{event.preventDefault();addCollection()};
+  document.querySelector('#custom-collections').onclick=event=>{const button=event.target.closest('[data-delete-collection]');if(button)deleteCollection(button.dataset.deleteCollection)};
   document.querySelector('#save-collections').onclick=save;
 }
 
 async function init(){
-  CATEGORY_OPTIONS.forEach(category=>document.querySelector('#admin-category').add(new Option(category,category)));
+  refreshCategoryFilter();
   bind();
   try{
     items=await loadItems();

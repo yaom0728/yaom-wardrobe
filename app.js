@@ -2,8 +2,9 @@ const STATUS = {};
 
 // 관리자가 지정한 분류는 자동 판정보다 항상 우선합니다.
 let categoryOverrides = {};
+let customCollections = [];
 
-const CATEGORIES = [
+const BASE_CATEGORIES = [
   {id:'전체', label:'전체 상품', icon:'▦'},
   {id:'아바타', label:'아바타', icon:'○'},
   {id:'의상', label:'의상', icon:'◇'},
@@ -14,6 +15,10 @@ const CATEGORIES = [
   {id:'월드', label:'월드', icon:'⌂'},
   {id:'툴', label:'툴', icon:'⚙'}
 ];
+
+function categories(){
+  return [...BASE_CATEGORIES,...customCollections.map(name=>({id:name,label:name,icon:'□'}))];
+}
 
 const state = {
   category:'전체', special:'', query:'', shop:'', avatar:'', sort:'new',
@@ -88,7 +93,7 @@ function countFor(items, category){
 
 function drawNav(items){
   const nav=document.querySelector('#main-nav');
-  nav.innerHTML=CATEGORIES.map(cat=>`<button class="side-item ${!state.special&&state.category===cat.id?'active':''}" type="button" data-category="${cat.id}"><span class="side-icon">${cat.icon}</span><span>${cat.label}</span><b>${countFor(items,cat.id)}</b></button>`).join('');
+  nav.innerHTML=categories().map(cat=>`<button class="side-item ${!state.special&&state.category===cat.id?'active':''}" type="button" data-category="${escapeHtml(cat.id)}"><span class="side-icon">${cat.icon}</span><span>${escapeHtml(cat.label)}</span><b>${countFor(items,cat.id)}</b></button>`).join('');
   nav.querySelectorAll('[data-category]').forEach(button=>button.onclick=()=>selectCategory(button.dataset.category,items));
 
   document.querySelectorAll('[data-special]').forEach(button=>{
@@ -137,7 +142,7 @@ function currentLabel(){
   if(state.special==='gift') return '받은 기프트';
   if(state.special==='favorite') return '즐겨찾기';
   if(state.special==='unavailable') return '판매 종료 / 샵 폐쇄';
-  return CATEGORIES.find(cat=>cat.id===state.category)?.label || '전체 상품';
+  return categories().find(cat=>cat.id===state.category)?.label || '전체 상품';
 }
 
 function filteredItems(items){
@@ -241,7 +246,9 @@ function init(items){
 }
 
 Promise.all([loadData(),loadOverrides()]).then(([items,overrides])=>{
-  categoryOverrides=overrides;
+  const config=overrides?.assignments?overrides:{customCollections:[],assignments:overrides||{}};
+  categoryOverrides=config.assignments||{};
+  customCollections=Array.isArray(config.customCollections)?config.customCollections:[];
   init(items);
 }).catch(error=>{
   console.error(error);

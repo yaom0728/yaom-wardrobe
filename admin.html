@@ -6,15 +6,16 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#f5f7fa">
   <title>야옴 옷장 — 컬렉션 관리</title>
+  <script src="theme.js?v=20260920-collections"></script>
   <link rel="preconnect" href="https://booth.pximg.net">
   <link rel="stylesheet" href="styles.css?v=20260920-admin">
-  <link rel="stylesheet" href="theme.css?v=20260920-admin">
-  <link rel="stylesheet" href="admin.css?v=20260920-remember">
+  <link rel="stylesheet" href="theme.css?v=20260920-collections">
+  <link rel="stylesheet" href="admin.css?v=20260920-collections">
 </head>
 <body class="admin-page">
   <header class="admin-header">
     <a class="admin-brand" href="./"><span class="brand-mark">Y</span><span><strong>YAOM Shelf</strong><small>Collection manager</small></span></a>
-    <a class="back-link" href="./">공개 옷장 보기 ↗</a>
+    <div class="admin-actions"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="다크 모드로 전환">☾</button><a class="back-link" href="./">공개 옷장 보기 ↗</a></div>
   </header>
 
   <main class="admin-shell">
@@ -45,6 +46,12 @@
         <button id="disconnect" type="button">연결 해제</button>
       </div>
 
+      <section class="collection-builder" aria-labelledby="collection-builder-title">
+        <div><p class="panel-label">CUSTOM COLLECTIONS</p><h2 id="collection-builder-title">내 컬렉션</h2><span>새 컬렉션을 만든 뒤 상품 카드에서 선택하세요.</span></div>
+        <form id="collection-form"><input id="collection-name" type="text" maxlength="30" autocomplete="off" placeholder="예: 동양풍, 여름 코디"><button type="submit">컬렉션 추가</button></form>
+        <div id="custom-collections" class="custom-collections"></div>
+      </section>
+
       <div class="editor-toolbar">
         <label class="admin-search" for="admin-search"><span>⌕</span><input id="admin-search" type="search" placeholder="상품명 · 판매자 · 상품 번호 검색"></label>
         <select id="admin-category" aria-label="카테고리 필터"><option value="">모든 카테고리</option></select>
@@ -68,6 +75,6 @@
   </main>
 
   <script src="data.js?v=20260920-admin"></script>
-  <script src="admin.js?v=20260920-remember"></script>
+  <script src="admin.js?v=20260920-collections"></script>
 </body>
 </html>
