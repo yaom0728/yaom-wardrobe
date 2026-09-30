@@ -16,6 +16,14 @@ const BASE_CATEGORIES = [
   {id:'툴', label:'툴', icon:'⚙'}
 ];
 
+// BOOTH 상품 자체가 아바타인 경우의 이름입니다. 지원 아바타 태그와는 구분합니다.
+const OWNED_AVATAR_BY_ID = {
+  '7363489':'Nochica', '6106863':'Shinano', '8107818':'ラビ先輩',
+  '7502898':'Lumina', '6082686':'Airi', '4667400':'Moe',
+  '5650156':'Sio', '5058077':'Manuka', '8122803':'Mayo',
+  '5260363':'Komano'
+};
+
 function categories(){
   return [...BASE_CATEGORIES,...customCollections.map(name=>({id:name,label:name,icon:'□'}))];
 }
@@ -27,6 +35,24 @@ const state = {
 
 function itemId(item){
   return (item.u.match(/items\/(\d+)/) || [])[1] || String(item.i);
+}
+
+function ownedAvatarName(item){
+  if(item.category!=='아바타') return '';
+  return OWNED_AVATAR_BY_ID[itemId(item)] ||
+    item.t.match(/[「『]([^」』]+)[」』]/)?.[1]?.trim() ||
+    item.a?.[0] || item.t;
+}
+
+function ownedAvatars(items){
+  return [...new Set(items.map(ownedAvatarName).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+}
+
+function matchesAvatar(item, avatar){
+  return item.category==='아바타'
+    ? ownedAvatarName(item)===avatar
+    : !!item.a?.includes(avatar);
 }
 
 function categoryOf(item){
@@ -77,6 +103,10 @@ function resetFilters(items, keepCategory=false){
 
 function selectCategory(category, items){
   state.category=category; state.special='';
+  if(category==='전체'){
+    state.avatar='';
+    document.querySelector('#avatar').value='';
+  }
   drawNav(items); render(items); closeMobileMenu();
   if(innerWidth<760) document.querySelector('.library').scrollIntoView();
 }
@@ -87,14 +117,28 @@ function selectSpecial(special, items){
   if(innerWidth<760) document.querySelector('.library').scrollIntoView();
 }
 
+function selectOwnedAvatar(avatar, items){
+  state.avatar=avatar; state.category='전체'; state.special='';
+  state.query=''; state.shop='';
+  document.querySelector('#avatar').value=avatar;
+  document.querySelector('#search').value='';
+  document.querySelector('#shop').value='';
+  drawNav(items); render(items); closeMobileMenu();
+  if(innerWidth<760) document.querySelector('.library').scrollIntoView();
+}
+
 function countFor(items, category){
   return category==='전체' ? items.length : items.filter(item=>item.category===category).length;
 }
 
 function drawNav(items){
   const nav=document.querySelector('#main-nav');
-  nav.innerHTML=categories().map(cat=>`<button class="side-item ${!state.special&&state.category===cat.id?'active':''}" type="button" data-category="${escapeHtml(cat.id)}"><span class="side-icon">${cat.icon}</span><span>${escapeHtml(cat.label)}</span><b>${countFor(items,cat.id)}</b></button>`).join('');
+  nav.innerHTML=categories().map(cat=>`<button class="side-item ${!state.special&&state.category===cat.id&&!(cat.id==='전체'&&state.avatar)?'active':''}" type="button" data-category="${escapeHtml(cat.id)}"><span class="side-icon">${cat.icon}</span><span>${escapeHtml(cat.label)}</span><b>${countFor(items,cat.id)}</b></button>`).join('');
   nav.querySelectorAll('[data-category]').forEach(button=>button.onclick=()=>selectCategory(button.dataset.category,items));
+
+  const avatarNav=document.querySelector('#avatar-nav');
+  avatarNav.innerHTML=ownedAvatars(items).map(avatar=>`<button class="side-item ${state.avatar===avatar?'active':''}" type="button" data-owned-avatar="${escapeHtml(avatar)}"><span class="side-icon">○</span><span>${escapeHtml(avatar)}</span><b>${items.filter(item=>matchesAvatar(item,avatar)).length}</b></button>`).join('');
+  avatarNav.querySelectorAll('[data-owned-avatar]').forEach(button=>button.onclick=()=>selectOwnedAvatar(button.dataset.ownedAvatar,items));
 
   document.querySelectorAll('[data-special]').forEach(button=>{
     button.classList.toggle('active',state.special===button.dataset.special);
@@ -106,10 +150,11 @@ function drawNav(items){
 }
 
 function avatarTags(item){
-  if(!item.a?.length) return '';
-  const tags=item.a.slice(0,3).map(avatar=>`<span>${escapeHtml(avatar)}</span>`).join('');
-  const more=item.a.length>3?`<span>+${item.a.length-3}</span>`:'';
-  return `<div class="avatar-tags" title="${escapeHtml(item.a.join(', '))}">${tags}${more}</div>`;
+  const avatars=item.category==='아바타'?[ownedAvatarName(item)]:(item.a||[]);
+  if(!avatars.length) return '';
+  const tags=avatars.slice(0,3).map(avatar=>`<span>${escapeHtml(avatar)}</span>`).join('');
+  const more=avatars.length>3?`<span>+${avatars.length-3}</span>`:'';
+  return `<div class="avatar-tags" title="${escapeHtml(avatars.join(', '))}">${tags}${more}</div>`;
 }
 
 function statusBadge(item){
@@ -153,7 +198,7 @@ function filteredItems(items){
     if(state.special==='favorite' && !state.favorites.has(itemId(item))) return false;
     if(state.special==='unavailable' && !STATUS[itemId(item)]) return false;
     if(state.shop && item.s!==state.shop) return false;
-    if(state.avatar && !item.a?.includes(state.avatar)) return false;
+    if(state.avatar && !matchesAvatar(item,state.avatar)) return false;
     if(query && !`${item.t} ${item.s} ${(item.a||[]).join(' ')}`.toLowerCase().includes(query)) return false;
     return true;
   });
@@ -178,7 +223,7 @@ function drawFilterChips(items){
     if(key==='query') document.querySelector('#search').value='';
     if(key==='shop') document.querySelector('#shop').value='';
     if(key==='avatar') document.querySelector('#avatar').value='';
-    render(items);
+    drawNav(items); render(items);
   });
 }
 
@@ -202,13 +247,13 @@ function render(items){
 
 function fillSelects(items){
   [...new Set(items.map(item=>item.s))].sort((a,b)=>a.localeCompare(b)).forEach(shop=>document.querySelector('#shop').add(new Option(shop,shop)));
-  [...new Set(items.flatMap(item=>item.a||[]))].sort((a,b)=>a.localeCompare(b)).forEach(avatar=>document.querySelector('#avatar').add(new Option(avatar,avatar)));
+  ownedAvatars(items).forEach(avatar=>document.querySelector('#avatar').add(new Option(avatar,avatar)));
 }
 
 function bindControls(items){
   document.querySelector('#search').oninput=event=>{state.query=event.target.value;render(items)};
   document.querySelector('#shop').onchange=event=>{state.shop=event.target.value;render(items)};
-  document.querySelector('#avatar').onchange=event=>{state.avatar=event.target.value;render(items)};
+  document.querySelector('#avatar').onchange=event=>{state.avatar=event.target.value;drawNav(items);render(items)};
   document.querySelector('#sort').onchange=event=>{state.sort=event.target.value;render(items)};
   document.querySelector('#clear-filters').onclick=()=>resetFilters(items);
   document.querySelector('#empty-reset').onclick=()=>resetFilters(items);
