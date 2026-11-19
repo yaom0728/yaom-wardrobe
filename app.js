@@ -145,7 +145,7 @@ function drawNav(items){
     button.onclick=()=>selectSpecial(button.dataset.special,items);
   });
   document.querySelector('#gift-count').textContent=items.filter(item=>item.g).length;
-  document.querySelector('#favorite-count').textContent=state.favorites.size;
+  document.querySelector('#favorite-count').textContent=items.filter(item=>state.favorites.has(itemId(item))).length;
   document.querySelector('#unavailable-count').textContent=items.filter(item=>STATUS[itemId(item)]).length;
 }
 
@@ -294,7 +294,8 @@ Promise.all([loadData(),loadOverrides()]).then(([items,overrides])=>{
   const config=overrides?.assignments?overrides:{customCollections:[],assignments:overrides||{}};
   categoryOverrides=config.assignments||{};
   customCollections=Array.isArray(config.customCollections)?config.customCollections:[];
-  init(items);
+  const hiddenItems=new Set(Array.isArray(config.hiddenItems)?config.hiddenItems.map(String):[]);
+  init(items.filter(item=>!hiddenItems.has(itemId(item))));
 }).catch(error=>{
   console.error(error);
   const empty=document.querySelector('#empty');

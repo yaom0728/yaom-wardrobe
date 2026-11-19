@@ -12,6 +12,11 @@ let originalOverrides={};
 let draftOverrides={};
 let originalCustomCollections=[];
 let draftCustomCollections=[];
+let originalHiddenItems=new Set();
+let draftHiddenItems=new Set();
+let configExtras={};
+let visibilityFilter='';
+let saving=false;
 let query='';
 let categoryFilter='';
 let changedOnly=false;
@@ -33,17 +38,19 @@ function baseCategoryOf(item){
 
 function escapeHtml(value=''){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
 function effectiveCategory(item,overrides=draftOverrides){return overrides[itemId(item)]||baseCategoryOf(item)}
-function isChanged(item){return effectiveCategory(item)!==effectiveCategory(item,originalOverrides)}
+function isChanged(item){return effectiveCategory(item)!==effectiveCategory(item,originalOverrides)||draftHiddenItems.has(itemId(item))!==originalHiddenItems.has(itemId(item))}
 function categoryOptions(){return[...BASE_CATEGORY_OPTIONS,...draftCustomCollections]}
 function collectionsChanged(){return JSON.stringify(draftCustomCollections)!==JSON.stringify(originalCustomCollections)}
 function hasPendingChanges(){return collectionsChanged()||items.some(isChanged)}
 
 function normalizeConfig(value){
   if(value&&value.assignments)return{
+    ...value,
     customCollections:Array.isArray(value.customCollections)?value.customCollections:[],
-    assignments:value.assignments||{}
+    assignments:value.assignments||{},
+    hiddenItems:Array.isArray(value.hiddenItems)?value.hiddenItems.map(String):[]
   };
-  return{customCollections:[],assignments:value||{}};
+  return{customCollections:[],assignments:value||{},hiddenItems:[]};
 }
 
 async function loadItems(){
@@ -106,6 +113,9 @@ async function connect(rememberedToken=''){
     const file=await github(`/repos/${REPOSITORY}/contents/${COLLECTION_FILE}?ref=main`);
     fileSha=file.sha;
     const config=normalizeConfig(JSON.parse(decodeBase64(file.content)));
+    configExtras={...config};
+    originalHiddenItems=new Set(config.hiddenItems);
+    draftHiddenItems=new Set(originalHiddenItems);
     originalOverrides={...config.assignments};
     draftOverrides={...originalOverrides};
     originalCustomCollections=[...config.customCollections];
@@ -125,6 +135,7 @@ async function connect(rememberedToken=''){
 
 function disconnect(){
   accessToken='';fileSha='';originalOverrides={};draftOverrides={};originalCustomCollections=[];draftCustomCollections=[];
+  originalHiddenItems=new Set();draftHiddenItems=new Set();configExtras={};
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   document.querySelector('#remember-token').checked=false;
   document.querySelector('#editor').hidden=true;
@@ -134,11 +145,13 @@ function disconnect(){
 
 function card(item){
   const id=itemId(item),current=effectiveCategory(item),changed=isChanged(item);
+  const hidden=draftHiddenItems.has(id);
   const options=categoryOptions().map(category=>`<option value="${escapeHtml(category)}" ${current===category?'selected':''}>${escapeHtml(category)}</option>`).join('');
-  return `<article class="admin-card ${changed?'changed':''}" data-id="${id}">
-    <a class="admin-thumb" href="${item.u}" target="_blank" rel="noopener"><img src="${item.m}" alt="" loading="lazy" referrerpolicy="no-referrer"><b>#${id}</b></a>
+  return `<article class="admin-card ${changed?'changed':''} ${hidden?'is-private':''}" data-id="${id}">
+    <a class="admin-thumb" href="${item.u}" target="_blank" rel="noopener"><img src="${item.m}" alt="" loading="lazy" referrerpolicy="no-referrer"><b>#${id}</b>${hidden?'<span class="private-badge">비공개</span>':''}</a>
     <div class="admin-card-body"><span class="admin-shop">${escapeHtml(item.s)}</span><h3 class="admin-title">${escapeHtml(item.t)}</h3>
       <label class="category-control"><span>컬렉션</span><select data-category-id="${id}" aria-label="${escapeHtml(item.t)} 카테고리">${options}</select></label>
+      <label class="visibility-control"><span>공개 설정</span><select data-visibility-id="${id}" aria-label="${escapeHtml(item.t)} 공개 설정"><option value="public" ${hidden?'':'selected'}>공개</option><option value="private" ${hidden?'selected':''}>비공개 · 목록에서 숨김</option></select></label>
     </div>
   </article>`;
 }
@@ -147,6 +160,8 @@ function visibleItems(){
   const normalized=query.trim().toLowerCase();
   return items.filter(item=>{
     if(categoryFilter&&effectiveCategory(item)!==categoryFilter)return false;
+    if(visibilityFilter==='private'&&!draftHiddenItems.has(itemId(item)))return false;
+    if(visibilityFilter==='public'&&draftHiddenItems.has(itemId(item)))return false;
     if(changedOnly&&!isChanged(item))return false;
     if(normalized&&!`${item.t} ${item.s} ${itemId(item)}`.toLowerCase().includes(normalized))return false;
     return true;
@@ -161,8 +176,9 @@ function render(){
   grid.innerHTML=visible.map(card).join('');
   document.querySelector('#admin-count').textContent=visible.length.toLocaleString('ko-KR');
   document.querySelector('#changed-count').textContent=changedCount.toLocaleString('ko-KR');
+  document.querySelector('#private-count').textContent=items.filter(item=>draftHiddenItems.has(itemId(item))).length.toLocaleString('ko-KR');
   document.querySelector('#dock-count').textContent=changedCount?`${changedCount}개 상품 변경됨`:customChanged?'컬렉션 구성 변경됨':'변경 사항 없음';
-  document.querySelector('#save-collections').disabled=!hasPendingChanges();
+  document.querySelector('#save-collections').disabled=saving||!hasPendingChanges();
   document.querySelector('#admin-empty').hidden=visible.length!==0;
   renderCustomCollections();
   refreshCategoryFilter();
@@ -210,26 +226,36 @@ function changeCategory(id,category){
   render();
 }
 
+function changeVisibility(id,value){
+  if(!items.some(item=>itemId(item)===id))return;
+  if(value==='private')draftHiddenItems.add(id);else draftHiddenItems.delete(id);
+  render();
+}
+
 async function save(){
+  if(saving)return;
   if(!accessToken){toast('관리자 연결이 끊겼어요. 다시 연결해 주세요.',true);disconnect();return}
   const changedCount=items.filter(isChanged).length;
   if(!hasPendingChanges())return;
   const button=document.querySelector('#save-collections');
+  const snapshot={...configExtras,customCollections:[...draftCustomCollections],assignments:{...draftOverrides},hiddenItems:[...draftHiddenItems].sort()};
+  saving=true;
   button.disabled=true;button.textContent='저장 중…';
   try{
-    const content=`${JSON.stringify({customCollections:draftCustomCollections,assignments:draftOverrides},null,2)}\n`;
+    const content=`${JSON.stringify(snapshot,null,2)}\n`;
     const result=await github(`/repos/${REPOSITORY}/contents/${COLLECTION_FILE}`,{
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({message:`Update wardrobe collections (${changedCount} item changes)`,content:encodeBase64(content),sha:fileSha,branch:'main'})
     });
     fileSha=result.content.sha;
-    originalOverrides={...draftOverrides};
-    originalCustomCollections=[...draftCustomCollections];
+    originalOverrides={...snapshot.assignments};
+    originalCustomCollections=[...snapshot.customCollections];
+    originalHiddenItems=new Set(snapshot.hiddenItems);
     render();
     toast('저장했어요. 공개 옷장에는 보통 1~2분 안에 반영됩니다.');
   }catch(error){toast(error.message||'저장하지 못했어요.',true)}
-  finally{button.textContent='컬렉션 저장';button.disabled=!hasPendingChanges()}
+  finally{saving=false;button.textContent='설정 저장';button.disabled=!hasPendingChanges()}
 }
 
 function bind(){
@@ -238,8 +264,9 @@ function bind(){
   document.querySelector('#disconnect').onclick=disconnect;
   document.querySelector('#admin-search').oninput=event=>{query=event.target.value;render()};
   document.querySelector('#admin-category').onchange=event=>{categoryFilter=event.target.value;render()};
+  document.querySelector('#admin-visibility').onchange=event=>{visibilityFilter=event.target.value;render()};
   document.querySelector('#changed-only').onchange=event=>{changedOnly=event.target.checked;render()};
-  document.querySelector('#admin-grid').onchange=event=>{if(event.target.matches('[data-category-id]'))changeCategory(event.target.dataset.categoryId,event.target.value)};
+  document.querySelector('#admin-grid').onchange=event=>{if(event.target.matches('[data-category-id]'))changeCategory(event.target.dataset.categoryId,event.target.value);else if(event.target.matches('[data-visibility-id]'))changeVisibility(event.target.dataset.visibilityId,event.target.value)};
   document.querySelector('#collection-form').onsubmit=event=>{event.preventDefault();addCollection()};
   document.querySelector('#custom-collections').onclick=event=>{const button=event.target.closest('[data-delete-collection]');if(button)deleteCollection(button.dataset.deleteCollection)};
   document.querySelector('#save-collections').onclick=save;

@@ -1,0 +1,13 @@
+/* Public-list visibility and admin controls. */
+[hidden]{display:none!important}
+.editor-toolbar{grid-template-columns:minmax(180px,1fr) 180px 180px 155px}
+.visibility-control{display:block;margin-top:12px}
+.visibility-control span{display:block;margin-bottom:6px;color:var(--muted);font-size:14px;font-weight:700}
+.visibility-control select{width:100%;min-height:42px;border:1px solid var(--line);border-radius:9px;background:var(--bg);padding:0 8px;color:var(--ink);font-size:14px;cursor:pointer}
+.visibility-control select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.private-badge{position:absolute;right:8px;top:8px;padding:6px 9px;border-radius:7px;background:#27354d;color:#fff;font-size:14px;font-weight:700}
+.admin-card.is-private .visibility-control select{border-style:dashed}
+.visibility-note{margin:14px 0 0;color:var(--muted);font-size:14px;line-height:1.7}
+.editor-summary{flex-wrap:wrap}
+@media(max-width:1100px){.editor-toolbar{grid-template-columns:1fr 1fr}.editor-toolbar .changed-toggle{grid-column:auto}}
+@media(max-width:620px){.editor-toolbar{grid-template-columns:1fr}}
