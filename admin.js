@@ -21,6 +21,7 @@ let query='';
 let categoryFilter='';
 let changedOnly=false;
 let messageTimer;
+let selectedItems=new Set();
 
 function itemId(item){return(item.u.match(/items\/(\d+)/)||[])[1]||String(item.i)}
 
@@ -116,6 +117,7 @@ async function connect(rememberedToken=''){
     configExtras={...config};
     originalHiddenItems=new Set(config.hiddenItems);
     draftHiddenItems=new Set(originalHiddenItems);
+    selectedItems.clear();
     originalOverrides={...config.assignments};
     draftOverrides={...originalOverrides};
     originalCustomCollections=[...config.customCollections];
@@ -136,6 +138,7 @@ async function connect(rememberedToken=''){
 function disconnect(){
   accessToken='';fileSha='';originalOverrides={};draftOverrides={};originalCustomCollections=[];draftCustomCollections=[];
   originalHiddenItems=new Set();draftHiddenItems=new Set();configExtras={};
+  selectedItems.clear();
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   document.querySelector('#remember-token').checked=false;
   document.querySelector('#editor').hidden=true;
@@ -147,9 +150,9 @@ function card(item){
   const id=itemId(item),current=effectiveCategory(item),changed=isChanged(item);
   const hidden=draftHiddenItems.has(id);
   const options=categoryOptions().map(category=>`<option value="${escapeHtml(category)}" ${current===category?'selected':''}>${escapeHtml(category)}</option>`).join('');
-  return `<article class="admin-card ${changed?'changed':''} ${hidden?'is-private':''}" data-id="${id}">
+  return `<article class="admin-card ${changed?'changed':''} ${hidden?'is-private':''} ${selectedItems.has(id)?'is-selected':''}" data-id="${id}">
     <a class="admin-thumb" href="${item.u}" target="_blank" rel="noopener"><img src="${item.m}" alt="" loading="lazy" referrerpolicy="no-referrer"><b>#${id}</b>${hidden?'<span class="private-badge">비공개</span>':''}</a>
-    <div class="admin-card-body"><span class="admin-shop">${escapeHtml(item.s)}</span><h3 class="admin-title">${escapeHtml(item.t)}</h3>
+    <div class="admin-card-body"><label class="item-selection"><input type="checkbox" data-select-id="${id}" aria-label="${escapeHtml(item.t)} 선택" ${selectedItems.has(id)?'checked':''}><span>상품 선택</span></label><span class="admin-shop">${escapeHtml(item.s)}</span><h3 class="admin-title">${escapeHtml(item.t)}</h3>
       <label class="category-control"><span>컬렉션</span><select data-category-id="${id}" aria-label="${escapeHtml(item.t)} 카테고리">${options}</select></label>
       <label class="visibility-control"><span>공개 설정</span><select data-visibility-id="${id}" aria-label="${escapeHtml(item.t)} 공개 설정"><option value="public" ${hidden?'':'selected'}>공개</option><option value="private" ${hidden?'selected':''}>비공개 · 목록에서 숨김</option></select></label>
     </div>
@@ -170,6 +173,7 @@ function visibleItems(){
 
 function render(){
   const visible=visibleItems();
+  pruneSelection(visible);
   const changedCount=items.filter(isChanged).length;
   const customChanged=collectionsChanged();
   const grid=document.querySelector('#admin-grid');
@@ -182,6 +186,63 @@ function render(){
   document.querySelector('#admin-empty').hidden=visible.length!==0;
   renderCustomCollections();
   refreshCategoryFilter();
+  renderSelection(visible);
+}
+
+function pruneSelection(visible=visibleItems()){
+  const visibleIds=new Set(visible.map(itemId));
+  for(const id of selectedItems)if(!visibleIds.has(id))selectedItems.delete(id);
+}
+
+function renderSelection(visible=visibleItems()){
+  pruneSelection(visible);
+  const count=selectedItems.size;
+  const all=document.querySelector('#select-visible');
+  all.checked=visible.length>0&&count===visible.length;
+  all.indeterminate=count>0&&count<visible.length;
+  all.disabled=saving||visible.length===0;
+  document.querySelector('#select-visible-count').textContent=visible.length.toLocaleString('ko-KR');
+  document.querySelector('#selection-count').textContent=`${count.toLocaleString('ko-KR')}개 선택됨`;
+  for(const id of ['#bulk-public','#bulk-private','#clear-selection'])document.querySelector(id).disabled=saving||count===0;
+  document.querySelectorAll('[data-select-id]').forEach(input=>{
+    input.checked=selectedItems.has(input.dataset.selectId);
+    input.disabled=saving;
+  });
+  document.querySelectorAll('.admin-card[data-id]').forEach(card=>card.classList.toggle('is-selected',selectedItems.has(card.dataset.id)));
+}
+
+function selectItem(id,checked){
+  if(saving||!visibleItems().some(item=>itemId(item)===id))return;
+  if(checked)selectedItems.add(id);else selectedItems.delete(id);
+  renderSelection();
+}
+
+function selectVisible(checked){
+  if(saving)return;
+  if(checked)selectedItems=new Set(visibleItems().map(itemId));else selectedItems.clear();
+  renderSelection();
+}
+
+function clearSelection(){
+  selectedItems.clear();
+  renderSelection();
+}
+
+function resetSelectionAndRender(){
+  selectedItems.clear();
+  render();
+}
+
+function bulkVisibility(value){
+  if(saving||!['public','private'].includes(value))return;
+  const targets=visibleItems().filter(item=>selectedItems.has(itemId(item)));
+  if(!targets.length)return;
+  for(const item of targets){
+    if(value==='private')draftHiddenItems.add(itemId(item));else draftHiddenItems.delete(itemId(item));
+  }
+  selectedItems.clear();
+  render();
+  toast(`${targets.length}개 상품을 ${value==='private'?'비공개':'공개'}로 선택했어요. 설정 저장을 눌러 반영하세요.`);
 }
 
 function refreshCategoryFilter(){
@@ -240,6 +301,7 @@ async function save(){
   const button=document.querySelector('#save-collections');
   const snapshot={...configExtras,customCollections:[...draftCustomCollections],assignments:{...draftOverrides},hiddenItems:[...draftHiddenItems].sort()};
   saving=true;
+  renderSelection();
   button.disabled=true;button.textContent='저장 중…';
   try{
     const content=`${JSON.stringify(snapshot,null,2)}\n`;
@@ -255,18 +317,22 @@ async function save(){
     render();
     toast('저장했어요. 공개 옷장에는 보통 1~2분 안에 반영됩니다.');
   }catch(error){toast(error.message||'저장하지 못했어요.',true)}
-  finally{saving=false;button.textContent='설정 저장';button.disabled=!hasPendingChanges()}
+  finally{saving=false;button.textContent='설정 저장';button.disabled=!hasPendingChanges();renderSelection()}
 }
 
 function bind(){
   document.querySelector('#connect').onclick=()=>connect();
   document.querySelector('#github-token').onkeydown=event=>{if(event.key==='Enter')connect()};
   document.querySelector('#disconnect').onclick=disconnect;
-  document.querySelector('#admin-search').oninput=event=>{query=event.target.value;render()};
-  document.querySelector('#admin-category').onchange=event=>{categoryFilter=event.target.value;render()};
-  document.querySelector('#admin-visibility').onchange=event=>{visibilityFilter=event.target.value;render()};
-  document.querySelector('#changed-only').onchange=event=>{changedOnly=event.target.checked;render()};
-  document.querySelector('#admin-grid').onchange=event=>{if(event.target.matches('[data-category-id]'))changeCategory(event.target.dataset.categoryId,event.target.value);else if(event.target.matches('[data-visibility-id]'))changeVisibility(event.target.dataset.visibilityId,event.target.value)};
+  document.querySelector('#admin-search').oninput=event=>{query=event.target.value;resetSelectionAndRender()};
+  document.querySelector('#admin-category').onchange=event=>{categoryFilter=event.target.value;resetSelectionAndRender()};
+  document.querySelector('#admin-visibility').onchange=event=>{visibilityFilter=event.target.value;resetSelectionAndRender()};
+  document.querySelector('#changed-only').onchange=event=>{changedOnly=event.target.checked;resetSelectionAndRender()};
+  document.querySelector('#admin-grid').onchange=event=>{if(event.target.matches('[data-category-id]'))changeCategory(event.target.dataset.categoryId,event.target.value);else if(event.target.matches('[data-visibility-id]'))changeVisibility(event.target.dataset.visibilityId,event.target.value);else if(event.target.matches('[data-select-id]'))selectItem(event.target.dataset.selectId,event.target.checked)};
+  document.querySelector('#select-visible').onchange=event=>selectVisible(event.target.checked);
+  document.querySelector('#clear-selection').onclick=clearSelection;
+  document.querySelector('#bulk-public').onclick=()=>bulkVisibility('public');
+  document.querySelector('#bulk-private').onclick=()=>bulkVisibility('private');
   document.querySelector('#collection-form').onsubmit=event=>{event.preventDefault();addCollection()};
   document.querySelector('#custom-collections').onclick=event=>{const button=event.target.closest('[data-delete-collection]');if(button)deleteCollection(button.dataset.deleteCollection)};
   document.querySelector('#save-collections').onclick=save;

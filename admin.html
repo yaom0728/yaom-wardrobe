@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css?v=20260920-admin">
   <link rel="stylesheet" href="theme.css?v=20260920-collections">
   <link rel="stylesheet" href="admin.css?v=20261120-visibility">
-  <link rel="stylesheet" href="visibility.css?v=20261120-visibility">
+  <link rel="stylesheet" href="visibility.css?v=20261120-bulk">
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -67,6 +67,17 @@
       </div>
       <p class="visibility-note">비공개 상품은 공개 목록·검색·상품 수에서 숨겨집니다. 관리자에서는 계속 볼 수 있고 자동 동기화 후에도 유지됩니다. 공개 데이터나 과거 기록을 보호하는 보안 기능은 아닙니다.</p>
 
+      <section class="bulk-toolbar" aria-labelledby="bulk-title">
+        <div class="bulk-heading"><h2 id="bulk-title">선택 상품 일괄 변경</h2><strong id="selection-count" role="status" aria-live="polite">0개 선택됨</strong></div>
+        <div class="bulk-actions">
+          <label class="select-visible"><input id="select-visible" type="checkbox"><span>현재 결과 전체 선택 (<b id="select-visible-count">0</b>개)</span></label>
+          <button id="bulk-public" type="button" disabled>선택 상품 공개</button>
+          <button id="bulk-private" type="button" disabled>선택 상품 비공개</button>
+          <button id="clear-selection" type="button" disabled>선택 해제</button>
+        </div>
+        <p>현재 검색·필터 결과에서 선택한 상품에만 적용됩니다. 필터를 바꾸면 선택이 해제됩니다. 변경 후 아래의 ‘설정 저장’을 눌러 주세요.</p>
+      </section>
+
       <div id="admin-grid" class="admin-grid"></div>
       <div id="admin-empty" class="admin-empty" hidden>조건에 맞는 상품이 없어요.</div>
 
@@ -79,6 +90,6 @@
   </main>
 
   <script src="data.js?v=20260920-admin"></script>
-  <script src="admin.js?v=20261120-visibility"></script>
+  <script src="admin.js?v=20261120-bulk"></script>
 </body>
 </html>
